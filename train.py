@@ -31,12 +31,14 @@ def compute_metrics(pred):
     labels = pred.label_ids
     preds = pred.predictions
 
-    preds = torch.view_as_complex(preds.permute(0,2,3,1))
+    preds = torch.tensor(preds, dtype=torch.float32)
+
+    preds = torch.view_as_complex(preds.permute(0,2,3,1).contiguous())
 
     n_fft = 1024  
     signal = torch.istft(preds,
                         n_fft = n_fft,
-                        window = torch.hann_window(n_fft).to(preds),
+                        window = torch.hann_window(n_fft).to(preds.real),
                         )  # B * F * T  -> B * L
 
     batch = 8
