@@ -1,78 +1,11 @@
 import torch
-from transformers import AutoConfig, Trainer, TrainingArguments
+from transformers import Trainer, TrainingArguments
 import wandb
 from datasets import load_dataset
 from transformer_model import Transformer_E
 from musdb_dataset import hug_musdbhq
-
-wandb.init(
-    project="simple_song_splitter",
-    name = "stft_encoder18_test"
-)
-
-##train param
-learning_rate = 5e-2
-epochs = 1
-output_path = './result/12_30_test_hqdata.pt'
-
-## transformer param
-n_block = 6
-d_inner = 2048
-d_k = 512
-d_v = 512
-n_head = 8
-dropout = 0.1
-
-## stft param
-n_fft = 1024
-
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-model = Transformer_E(
-    n_block = n_block,
-    n_fft = n_fft,
-    d_inner = d_inner,
-    n_head = n_head,
-    d_k = d_k,
-    d_v = d_v,
-    dropout = dropout,
-    )
-
-model.to(device)
-
-print("model ready")
-
-# dataset = MusDBDataset_test()
-# dataset_train, dataset_valid = train_test_split(dataset,test_size=0.1)
-
-### Musdbhq 데이터셋 코드
-# train_path = []
-# valid_path = []
-
-# for path in glob("musdb18hq/train/*/mixture.wav"):
-#     train_path.append(path)
-
-# for path in glob("musdb18hq/test/*/mixture.wav"):
-#     valid_path.append(path)
-
-# dataset_train = MusDBhqDataset(train_path, duration = 300032/44100)
-# dataset_valid = MusDBhqDataset(valid_path, duration = 300032/44100)
-
-### Musdb 데이터셋 코드
-# train_mus = musdb.DB(root="musdb18",subsets ="train")
-# valid_mus = musdb.DB(root="musdb18",subsets="test")
-
-# dataset_train = MusDBDataset(train_mus,duration=5)
-# dataset_valid = MusDBDataset(valid_mus,duration=5)
-
-###huggingface musdb 데이터셋 코드
-
-musdb18hq = load_dataset("danjacobellis/musdb18HQ")
-
-dataset_train = hug_musdbhq(musdb18hq["train"], duration = 300032/44100)
-dataset_valid = hug_musdbhq(musdb18hq["validation"], duration = 300032/44100)
-
-print("dataset ready")
+import yaml
+import argparse
 
 
 def new_sdr(references, estimates):
@@ -108,16 +41,13 @@ def compute_metrics(pred):
 
     batch = 8
     total_sdr = 0
-    epsilon = torch.finfo(torch.float32).eps
 
     for i in range(signal.shape[0] // batch):
-        # total_sdr += sdr(signal[i*batch:(i+1)*batch,:],torch.tensor(labels[i*batch:(i+1)*batch,:])+epsilon) * batch
         total_sdr += new_sdr(signal[i*batch:(i+1)*batch,:],torch.tensor(labels[i*batch:(i+1)*batch,:])) * batch
 
     remain = signal.shape[0] % batch
 
     if remain > 0:
-        # total_sdr += sdr(signal[-remain:,:],torch.tensor(labels[-remain:,:])) * remain
         total_sdr += new_sdr(signal[-remain:,:],torch.tensor(labels[-remain:,:])) * remain
 
     signal_distortion_ratio = total_sdr / signal.shape[0]
@@ -127,32 +57,69 @@ def compute_metrics(pred):
         'signal distortion ratio': signal_distortion_ratio,
     }
 
-training_args = TrainingArguments(
-output_dir='./results',          # output directory
-save_total_limit=5,              # number of total save model.
-save_steps=300,                 # model saving step.
-num_train_epochs=epochs,              # total number of training epochs
-learning_rate=learning_rate,               # learning_rate
-per_device_train_batch_size=8,  # batch size per device during training
-per_device_eval_batch_size=8,   # batch size for evaluation
-warmup_steps=100,                # number of warmup steps for learning rate scheduler
-weight_decay=0,               # strength of weight decay
-logging_dir='./logs',            # directory for storing logs
-logging_steps=100,              # log saving step.
-eval_strategy='steps', # evaluation strategy to adopt during training
-eval_steps = 300,            # evaluation step.
-load_best_model_at_end = True,
-)
 
-trainer = Trainer(
-model=model,                         # the instantiated 🤗 Transformers model to be trained
-args=training_args,                  # training arguments, defined above
-train_dataset=dataset_train,         # training dataset
-eval_dataset=dataset_valid,             # evaluation dataset
-compute_metrics=compute_metrics         # define metrics function
-)
+if __name__ == "__main__":
 
-# train model
-trainer.train()
+    parser = argparse.ArgumentParser(description='Training splitter.')
+    parser.add_argument("--conf", type=str, default="config.yaml", help="config file path(.yaml)")
+    args = parser.parse_args()
+    with open(args.conf, "r") as f:
+        config = yaml.load(f, Loader=yaml.Loader)
 
-torch.save(model.state_dict(), output_path)
+    wandb.init(
+    project="simple_song_splitter",
+    name = config["train_name"]
+    )
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    model = Transformer_E(
+        n_block = config["n_block"],
+        n_fft = config["n_fft"],
+        d_inner = config["d_inner"],
+        n_head = config["n_head"],
+        d_k = config["d_k"],
+        d_v = config["d_v"],
+        dropout = config["dropout"],
+        )
+
+    model.to(device)
+
+    print("model ready")
+
+    musdb18hq = load_dataset("danjacobellis/musdb18HQ")
+
+    dataset_train = hug_musdbhq(musdb18hq["train"], duration = 300032/44100)
+    dataset_valid = hug_musdbhq(musdb18hq["validation"][:50], duration = 300032/44100)
+
+    print("dataset ready")
+    
+    training_args = TrainingArguments(
+    output_dir='./results',          # output directory
+    save_total_limit=5,              # number of total save model.
+    save_steps=300,                 # model saving step.
+    num_train_epochs=config["epochs"],              # total number of training epochs
+    learning_rate=config["learning_rate"],               # learning_rate
+    per_device_train_batch_size=config["batch_size"],  # batch size per device during training
+    per_device_eval_batch_size=config["batch_size"],   # batch size for evaluation
+    warmup_steps=100,                # number of warmup steps for learning rate scheduler
+    weight_decay=0,               # strength of weight decay
+    logging_dir='./logs',            # directory for storing logs
+    logging_steps=100,              # log saving step.
+    eval_strategy='steps', # evaluation strategy to adopt during training
+    eval_steps = 300,            # evaluation step.
+    load_best_model_at_end = True,
+    )
+
+    trainer = Trainer(
+    model=model,                         # the instantiated 🤗 Transformers model to be trained
+    args=training_args,                  # training arguments, defined above
+    train_dataset=dataset_train,         # training dataset
+    eval_dataset=dataset_valid,             # evaluation dataset
+    compute_metrics=compute_metrics         # define metrics function
+    )
+
+    # train model
+    trainer.train()
+
+    torch.save(model.state_dict(), config["output_path"])

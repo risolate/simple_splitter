@@ -1,0 +1,17 @@
+##train param
+train_name : "2026-01-01"
+learning_rate : 5e-2
+epochs : 1
+batch_size : 8
+output_path : './result/12_30_test_hqdata.pt'
+
+## transformer param
+n_block : 6
+d_inner : 2048
+d_k : 512
+d_v : 512
+n_head : 8
+dropout : 0.1
+
+## stft param
+n_fft : 1024
