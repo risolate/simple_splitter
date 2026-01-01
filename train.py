@@ -87,10 +87,10 @@ if __name__ == "__main__":
 
     print("model ready")
 
-    musdb18hq = load_dataset("danjacobellis/musdb18HQ")
+    musdb_train,musdb_valid = load_dataset("danjacobellis/musdb18HQ",split=["train","validation[:50%]"])
 
-    dataset_train = hug_musdbhq(musdb18hq["train"], duration = 300032/44100)
-    dataset_valid = hug_musdbhq(musdb18hq["validation"][:50], duration = 300032/44100)
+    dataset_train = hug_musdbhq(musdb_train, duration = 300032/44100)
+    dataset_valid = hug_musdbhq(musdb_valid, duration = 300032/44100)
 
     print("dataset ready")
     
