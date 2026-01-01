@@ -1,9 +1,9 @@
 ##train param
-train_name : "2026-01-01"
-learning_rate : 5e-2
-epochs : 1
+train_name : "stft_encoder"
+learning_rate : 5.0e-2
+epochs : 5
 batch_size : 8
-output_path : './result/12_30_test_hqdata.pt'
+output_path : "./result/01_01_test_hqdata.pt"
 
 ## transformer param
 n_block : 6
