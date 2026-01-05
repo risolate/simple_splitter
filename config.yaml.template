@@ -1,9 +1,9 @@
 ##train param
-train_name : "stft_encoder"
-learning_rate : 5.0e-2
+train_name : "new_splitter"
+learning_rate : 5.0e-5
 epochs : 5
 batch_size : 8
-output_path : "./result/01_01_test_hqdata.pt"
+output_path : "./musdb_5e.pt"
 
 ## transformer param
 n_block : 6

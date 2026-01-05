@@ -69,17 +69,17 @@ class hug_musdbhq(Dataset):
         waveform = waveform[:, :target_len_samples]
         vc_waveform = vc_waveform[:, :target_len_samples]
 
-        #모노로 전환
-        waveform = waveform.mean(dim=0)
-        vc_waveform = vc_waveform.mean(dim=0)
 
         spec = torch.functional.stft(
                                     waveform,
                                     window=torch.hann_window(self.n_fft).to(waveform),
                                     n_fft = self.n_fft, 
                                     return_complex = True,
-                                    )      # fq * T * 2
-        spec = torch.view_as_real(spec).permute(2,0,1)
+                                    )      #  C * fq * T 
+        
+        ch, freq, length = spec.shape
+        spec = torch.view_as_real(spec).permute(0,3,1,2).contiguous().view(-1,freq,length)
+        
         labels = vc_waveform
         item = {'input_ids': spec , 'labels': labels}
 

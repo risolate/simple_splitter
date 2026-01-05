@@ -183,11 +183,14 @@ class Transformer_E(nn.Module):
         if labels is not None:
             batch_size = x.shape[0]
             loss_fc = nn.MSELoss()
+
+            *other, length = labels.shape
+            labels = labels.reshape(-1,length)
             spec_label = torch.stft(labels,
                                     n_fft = self.n_fft,
                                     window=torch.hann_window(self.n_fft).to(labels),
                                     return_complex = True
-                                    )
+                                    )   # B C * fq * T
             spec_label = torch.view_as_real(spec_label).permute(0,3,1,2)
             loss = loss_fc(x.contiguous().view(batch_size,-1) ,spec_label.contiguous().view(batch_size,-1))
             return (loss, x)

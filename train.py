@@ -33,27 +33,19 @@ def compute_metrics(pred):
 
     preds = torch.tensor(preds, dtype=torch.float32)
 
-    preds = torch.view_as_complex(preds.permute(0,2,3,1).contiguous())
+    batch, ch, freq, length = preds.shape
+    preds = preds.view(batch,-1,2,freq,length)
+    preds = torch.view_as_complex(preds.permute(0,1,3,4,2).contiguous())
 
     n_fft = 1024  
+    preds = preds.view(-1,freq,length)
     signal = torch.istft(preds,
                         n_fft = n_fft,
                         window = torch.hann_window(n_fft).to(preds.real),
-                        )  # B * F * T  -> B * L
+                        )  # B C * F * T  -> B C * L
+    signal = signal.reshape(batch,ch//2,-1)
 
-    batch = 8
-    total_sdr = 0
-
-    for i in range(signal.shape[0] // batch):
-        total_sdr += new_sdr(signal[i*batch:(i+1)*batch,:],torch.tensor(labels[i*batch:(i+1)*batch,:])) * batch
-
-    remain = signal.shape[0] % batch
-
-    if remain > 0:
-        total_sdr += new_sdr(signal[-remain:,:],torch.tensor(labels[-remain:,:])) * remain
-
-    signal_distortion_ratio = total_sdr / signal.shape[0]
-
+    signal_distortion_ratio = new_sdr(signal,torch.tensor(labels)).mean(0)
 
     return {
         'signal distortion ratio': signal_distortion_ratio,
