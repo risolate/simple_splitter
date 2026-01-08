@@ -152,12 +152,14 @@ class Transformer_E(nn.Module):
         d_v=64,
         dropout=0.1,
         n_fft = 1024,
+        position_embedding = False,
     ):
         super(Transformer_E, self).__init__()
 
         self.preNet = PreNet(d_model,n_fft = n_fft)
         self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)
         self.postNet = PostNet(d_model,n_fft = n_fft)
+        self.position_embedding = position_embedding
         self.n_fft = n_fft
 
     def sinusoidal_positional_embedding(self, seq_len, dim):
@@ -174,8 +176,9 @@ class Transformer_E(nn.Module):
     def forward(self, input_ids, attention_mask = None, labels = None): # B * C * fq * T
 
         x = self.preNet(input_ids.transpose(-1,-2))  # B * C * T * d_model
-        pe = self.sinusoidal_positional_embedding(x.shape[-2], x.shape[-1])
-        x = x + pe.to(x.device)
+        if self.position_embedding:
+            pe = self.sinusoidal_positional_embedding(x.shape[-2], x.shape[-1])
+            x = x + pe.to(x.device)
         x = self.encoder(x)
         x = self.postNet(x)
         x = x.transpose(-1,-2) # B * C * fq * T
@@ -196,50 +199,6 @@ class Transformer_E(nn.Module):
             return (loss, x)
         else:
             return (x,)
-
-class Transformer_without_pe(nn.Module):
-    def __init__(
-        self,
-        d_model=512,
-        d_inner=2048,
-        n_block=6,
-        n_head=8,
-        d_k=64,
-        d_v=64,
-        dropout=0.1,
-        n_fft = 1024,
-    ):
-        super(Transformer_E, self).__init__()
-
-        self.preNet = PreNet(d_model,n_fft = n_fft)
-        self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)
-        self.postNet = PostNet(d_model,n_fft = n_fft)
-        self.n_fft = n_fft
-
-    def forward(self, input_ids, attention_mask = None, labels = None): # B * C * fq * T
-
-        x = self.preNet(input_ids.transpose(-1,-2))  # B * C * T * d_model
-        x = self.encoder(x)
-        x = self.postNet(x)
-        x = x.transpose(-1,-2) # B * C * fq * T
-        loss = None
-        if labels is not None:
-            batch_size = x.shape[0]
-            loss_fc = nn.MSELoss()
-
-            *other, length = labels.shape
-            labels = labels.reshape(-1,length)
-            spec_label = torch.stft(labels,
-                                    n_fft = self.n_fft,
-                                    window=torch.hann_window(self.n_fft).to(labels),
-                                    return_complex = True
-                                    )   # B C * fq * T
-            spec_label = torch.view_as_real(spec_label).permute(0,3,1,2)
-            loss = loss_fc(x.contiguous().view(batch_size,-1) ,spec_label.contiguous().view(batch_size,-1))
-            return (loss, x)
-        else:
-            return (x,)
-
 
 #bass #drums #other #vocals
 
@@ -254,6 +213,7 @@ class multi_transformer_E(nn.Module):
         d_v=64,
         dropout=0.1,
         n_fft = 1024,
+        position_embedding = False,
     ):
         super(multi_transformer_E, self).__init__()
 
@@ -263,6 +223,7 @@ class multi_transformer_E(nn.Module):
         self.drumspostNet = PostNet(d_model, n_fft = n_fft)
         self.basspostNet = PostNet(d_model, n_fft = n_fft)
         self.vocalspostNet = PostNet(d_model, n_fft = n_fft)
+        self.position_embedding = position_embedding
         self.n_fft = n_fft
 
     def sinusoidal_positional_embedding(self, seq_len, dim):
@@ -278,8 +239,9 @@ class multi_transformer_E(nn.Module):
     def forward(self, input_ids, attention_mask = None, labels = None): # B * C * fq * T
 
         x = self.preNet(input_ids.transpose(-1,-2))  # B * C * T * d_model
-        pe = self.sinusoidal_positional_embedding(x.shape[-2], x.shape[-1])
-        x = x + pe.to(x.device)
+        if self.position_embedding:
+            pe = self.sinusoidal_positional_embedding(x.shape[-2], x.shape[-1])
+            x = x + pe.to(x.device)
         x = self.encoder(x)
     
         output = torch.stack([self.otherpostNet(x), self.drumspostNet(x), self.basspostNet(x), self.vocalspostNet(x)],dim=1)
