@@ -2,8 +2,8 @@ import torch
 from transformers import Trainer, TrainingArguments
 import wandb
 from datasets import load_dataset
-from transformer_model import Transformer_E
-from musdb_dataset import hug_musdbhq
+from transformer_model import Transformer_E, multi_transformer_E
+from musdb_dataset import hug_musdbhq, multi_hug_musdbhq
 import yaml
 import argparse
 
@@ -32,7 +32,9 @@ def compute_metrics(pred):
     preds = pred.predictions
 
     preds = torch.tensor(preds, dtype=torch.float32)
-
+    if preds.dim() == 5:
+        preds = preds[:,3]
+        labels = labels[:,3]
     batch, ch, freq, length = preds.shape
     preds = preds.view(batch,-1,2,freq,length)
     preds = torch.view_as_complex(preds.permute(0,1,3,4,2).contiguous())
@@ -60,14 +62,15 @@ if __name__ == "__main__":
     with open(args.conf, "r") as f:
         config = yaml.load(f, Loader=yaml.Loader)
 
-    wandb.init(
-    project="simple_song_splitter",
-    name = config["train_name"]
-    )
+    if config["report_to_wandb"]:
+        wandb.init(
+        project="simple_song_splitter",
+        name = config["train_name"]
+        )
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    model = Transformer_E(
+    model = multi_transformer_E(
         n_block = config["n_block"],
         n_fft = config["n_fft"],
         d_inner = config["d_inner"],
@@ -81,10 +84,10 @@ if __name__ == "__main__":
 
     print("model ready")
 
-    musdb_train,musdb_valid = load_dataset("danjacobellis/musdb18HQ",split=["train","validation[:50%]"])
+    musdb_train,musdb_valid = load_dataset("danjacobellis/musdb18HQ",split=["train","validation[:25%]"])
 
-    dataset_train = hug_musdbhq(musdb_train, duration = 300032/44100)
-    dataset_valid = hug_musdbhq(musdb_valid, duration = 300032/44100)
+    dataset_train = multi_hug_musdbhq(musdb_train, duration = 300032/44100)
+    dataset_valid = multi_hug_musdbhq(musdb_valid, duration = 300032/44100)
 
     print("dataset ready")
     
@@ -97,12 +100,13 @@ if __name__ == "__main__":
     per_device_train_batch_size=config["batch_size"],  # batch size per device during training
     per_device_eval_batch_size=config["batch_size"],   # batch size for evaluation
     warmup_steps=100,                # number of warmup steps for learning rate scheduler
-    weight_decay=0,               # strength of weight decay
+    weight_decay=0.1,               # strength of weight decay
     logging_dir='./logs',            # directory for storing logs
     logging_steps=100,              # log saving step.
     eval_strategy='steps', # evaluation strategy to adopt during training
     eval_steps = 300,            # evaluation step.
     load_best_model_at_end = True,
+    report_to = "wandb" if config["report_to_wandb"] else "none"
     )
 
     trainer = Trainer(

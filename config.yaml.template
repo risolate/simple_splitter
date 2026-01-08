@@ -15,3 +15,6 @@ dropout : 0.1
 
 ## stft param
 n_fft : 1024
+
+## report
+report_to_wandb : False
