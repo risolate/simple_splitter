@@ -1,4 +1,7 @@
 *.pt
+*.wav
+*.mp3
+*.ipynb
 wandb
 .ipynb_checkpoints
 __pycache__

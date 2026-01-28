@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 
 
 class hug_musdbhq(Dataset):
-    def __init__(self, sub_dataset, duration=7, sample_rate=44100, n_fft = 1024):
+    def __init__(self, sub_dataset, duration=7, sample_rate = 44100, n_fft = 1024):
         self.sub_dataset = sub_dataset
         self.duration = duration
         self.sample_rate = sample_rate
@@ -78,13 +78,12 @@ class hug_musdbhq(Dataset):
                                     )      #  C * fq * T 
         
         ch, freq, length = spec.shape
-        spec = torch.view_as_real(spec).permute(0,3,1,2).contiguous().view(-1,freq,length)
+        spec = torch.view_as_real(spec).view(ch,freq,-1)
         
         labels = vc_waveform
         item = {'input_ids': spec , 'labels': labels}
 
         return item
-    
 
 
 class multi_hug_musdbhq(Dataset):

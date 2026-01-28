@@ -2,6 +2,6 @@ torchcodec
 torch
 torchaudio
 wandb
-torchcodec
 datasets
 transformers
+soundfile
