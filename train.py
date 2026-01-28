@@ -40,7 +40,7 @@ def compute_metrics(pred):
     preds = torch.view_as_complex(preds)
 
     n_fft = 1024  
-    preds = preds.view(-1,freq,length//2)
+    preds = preds.contiguous().view(-1,freq,length//2)
     signal = torch.istft(preds,
                         n_fft = n_fft,
                         window = torch.hann_window(n_fft).to(preds.real),

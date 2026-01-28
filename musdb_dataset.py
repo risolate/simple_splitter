@@ -78,7 +78,7 @@ class hug_musdbhq(Dataset):
                                     )      #  C * fq * T 
         
         ch, freq, length = spec.shape
-        spec = torch.view_as_real(spec).view(ch,freq,-1)
+        spec = torch.view_as_real(spec).contiguous().view(ch,freq,-1)
         
         labels = vc_waveform
         item = {'input_ids': spec , 'labels': labels}
