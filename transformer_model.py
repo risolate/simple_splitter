@@ -139,7 +139,63 @@ class PostNet(nn.Module):
         output = x
         return output
 
+class PreNetC(nn.Module):
+    def __init__(self, d_model, dropout = 0.1, n_channel = 4, kernel_size = 8, stride = 4, padding = 2):
+        super(PreNetC, self).__init__()
+        self.kernel_size = [kernel_size, 1]
+        self.stride = [stride, 1]
+        self.padding = [padding, 0]
+        self.d_model = d_model
+        self.conv1 = nn.Conv2d(n_channel, 16, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.conv2 = nn.Conv2d(16,64, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.conv3 = nn.Conv2d(64,256, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.conv4 = nn.Conv2d(256,512, kernel_size=self.kernel_size, stride=[8,0], padding=[0,0])
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+        self.dropout4 = nn.Dropout(dropout)
 
+    def forward(self,x):    # B * C * fq * T
+        x = self.dropout1(F.gelu(self.conv1(x)))
+        x = self.dropout2(F.gelu(self.conv2(x)))
+        x = self.dropout3(F.gelu(self.conv3(x)))
+        x = self.dropout4(F.gelu(self.conv4(x)))
+        B, C, Fr, T = x.shape 
+        x = x.reshape(B,-1,T)
+        scale = nn.Conv1d(x.shape[1],self.d_model,1)
+        output = scale(x)
+        return output
+
+
+class PostNetC(nn.Module):
+    def __init__(self, d_model, dropout = 0.1, n_channel = 4, kernel_size = 8, stride = 4, padding = 2, n_fft = 1024):
+        super(PostNetC, self).__init__()
+        self.kernel_size = [kernel_size, 1]
+        self.stride = [stride, 1]
+        self.padding = [padding, 0]
+        self.d_model = d_model
+        self.n_fft = n_fft
+        self.convt1 = nn.ConvTranspose2d(512, 256, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.convt2 = nn.ConvTranspose2d(256, 64, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.convt3 = nn.ConvTranspose2d(64,16, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.convt4 = nn.ConvTranspose2d(16,n_channel, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+        self.dropout4 = nn.Dropout(dropout)
+
+    def forward(self,x):    # B * fq * T
+        x = torch.unsqueeze(x,dim=2)
+        x = self.dropout1(F.gelu(self.convt1(x)))
+        x = self.dropout2(F.gelu(self.convt2(x)))
+        x = self.dropout3(F.gelu(self.convt3(x)))
+        x = self.dropout4(F.gelu(self.convt4(x)))
+        B, C, Fr, T = x.shape 
+        x = x.reshape(-1,Fr,T)
+        scale = nn.Conv1d(Fr,self.n_fft//2 + 1,1)
+        x = scale(x)
+        output = x.reshape(B,C,-1,T)
+        return output
 
 class Transformer_E(nn.Module):
     def __init__(
@@ -182,6 +238,64 @@ class Transformer_E(nn.Module):
         x = self.encoder(x)
         x = self.postNet(x)
         x = x.transpose(-1,-2) # B * C * fq * T
+        loss = None
+        if labels is not None:
+            batch_size = x.shape[0]
+            loss_fc = nn.MSELoss()
+
+            *other, length = labels.shape
+            labels = labels.reshape(-1,length)
+            spec_label = torch.stft(labels,
+                                    n_fft = self.n_fft,
+                                    window=torch.hann_window(self.n_fft).to(labels),
+                                    return_complex = True
+                                    )   # B C * fq * T
+            spec_label = torch.view_as_real(spec_label)
+            loss = loss_fc(x.contiguous().view(batch_size,-1) ,spec_label.contiguous().view(batch_size,-1))
+            return (loss, x)
+        else:
+            return (x,)
+
+class Transformer_EC(nn.Module):
+    def __init__(
+        self,
+        d_model=512,
+        d_inner=2048,
+        n_block=6,
+        n_head=8,
+        d_k=64,
+        d_v=64,
+        dropout=0.1,
+        n_fft = 1024,
+        position_embedding = False,
+    ):
+        super(Transformer_E, self).__init__()
+
+        self.preNetc = PreNetC(d_model, n_channel = 4, kernel_size = 8, stride = 4, padding = 2)
+        self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)
+        self.postNetc = PostNetC(d_model, n_channel = 4, kernel_size = 8, stride = 4, padding = 2, n_fft = n_fft)
+        self.position_embedding = position_embedding
+        self.n_fft = n_fft
+
+    def sinusoidal_positional_embedding(self, seq_len, dim):
+
+        position = torch.arange(seq_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, dim, 2) * -(torch.log(torch.tensor(10000.0)) / dim))
+        pe = torch.zeros(seq_len, dim)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        return pe    # len * d_model
+
+
+    def forward(self, input_ids, attention_mask = None, labels = None): # B * C * fq * T
+
+        x = self.preNetc(input_ids)  # B * C * d_model * T
+        if self.position_embedding:
+            pe = self.sinusoidal_positional_embedding(x.shape[-2], x.shape[-1])
+            x = x + pe.to(x.device)
+        x = self.encoder(x.transpose(-1,-2))
+        x = self.postNetc(x.transpose(-1,-2))  # B * C * fq * T
         loss = None
         if labels is not None:
             batch_size = x.shape[0]

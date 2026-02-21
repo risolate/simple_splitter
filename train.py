@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    model = Transformer_E(
+    model = Transformer_EC(
         n_block = config["n_block"],
         n_fft = config["n_fft"],
         d_inner = config["d_inner"],
