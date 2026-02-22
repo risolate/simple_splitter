@@ -149,7 +149,7 @@ class PreNetC(nn.Module):
         self.conv1 = nn.Conv2d(n_channel, 16, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
         self.conv2 = nn.Conv2d(16,64, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
         self.conv3 = nn.Conv2d(64,256, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
-        self.conv4 = nn.Conv2d(256,512, kernel_size=self.kernel_size, stride=[8,0], padding=[0,0])
+        self.conv4 = nn.Conv2d(256,512, kernel_size=self.kernel_size, stride=[8,1], padding=[0,0])
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
@@ -175,7 +175,7 @@ class PostNetC(nn.Module):
         self.padding = [padding, 0]
         self.d_model = d_model
         self.n_fft = n_fft
-        self.convt1 = nn.ConvTranspose2d(512, 256, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
+        self.convt1 = nn.ConvTranspose2d(512, 256, kernel_size=self.kernel_size, stride=[8,1], padding=[0,0])
         self.convt2 = nn.ConvTranspose2d(256, 64, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
         self.convt3 = nn.ConvTranspose2d(64,16, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
         self.convt4 = nn.ConvTranspose2d(16,n_channel, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
@@ -269,7 +269,7 @@ class Transformer_EC(nn.Module):
         n_fft = 1024,
         position_embedding = False,
     ):
-        super(Transformer_E, self).__init__()
+        super(Transformer_EC, self).__init__()
 
         self.preNetc = PreNetC(d_model, n_channel = 4, kernel_size = 8, stride = 4, padding = 2)
         self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)

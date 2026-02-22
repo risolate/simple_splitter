@@ -2,7 +2,7 @@ import torch
 from transformers import Trainer, TrainingArguments
 import wandb
 from datasets import load_dataset
-from transformer_model import Transformer_E, multi_transformer_E
+from transformer_model import Transformer_E, multi_transformer_E, Transformer_EC
 from musdb_dataset import hug_musdbhq, multi_hug_musdbhq
 import yaml
 import argparse
@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     print("model ready")
 
-    musdb_train,musdb_valid = load_dataset("danjacobellis/musdb18HQ",split=["train","validation[:25%]"])
+    musdb_train,musdb_valid = load_dataset("danjacobellis/musdb18HQ",split=["train","validation[:20%]"])
 
     dataset_train = hug_musdbhq(musdb_train, duration = 150528/44100)
     dataset_valid = hug_musdbhq(musdb_valid, duration = 150528/44100)
