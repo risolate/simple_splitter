@@ -36,16 +36,16 @@ def compute_metrics(pred):
         preds = preds[:,3]
         labels = labels[:,3]
     batch, ch, freq, length = preds.shape
-    preds = preds.view(batch,ch,freq,-1,2)
+    preds = preds.view(batch,-1,2,freq,length).permute(0,1,3,4,2)
     preds = torch.view_as_complex(preds)
 
     n_fft = 1024  
-    preds = preds.contiguous().view(-1,freq,length//2)
+    preds = preds.contiguous().view(-1,freq,length)
     signal = torch.istft(preds,
                         n_fft = n_fft,
                         window = torch.hann_window(n_fft).to(preds.real),
                         )  # B C * F * T  -> B C * L
-    signal = signal.reshape(batch,ch,-1)
+    signal = signal.reshape(batch,ch//2,-1)
 
     signal_distortion_ratio = new_sdr(signal,torch.tensor(labels)).mean(0)
 

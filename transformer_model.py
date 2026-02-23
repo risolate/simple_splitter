@@ -311,7 +311,7 @@ class Transformer_EC(nn.Module):
                                     window=torch.hann_window(self.n_fft).to(labels),
                                     return_complex = True
                                     )   # B C * fq * T
-            spec_label = torch.view_as_real(spec_label)
+            spec_label = torch.view_as_real(spec_label).permute(0,3,1,2)
             loss = loss_fc(x.contiguous().view(batch_size,-1) ,spec_label.contiguous().view(batch_size,-1))
             return (loss, x)
         else:
