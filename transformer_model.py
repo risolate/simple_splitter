@@ -154,6 +154,7 @@ class PreNetC(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
         self.dropout4 = nn.Dropout(dropout)
+        self.scale = nn.Conv1d(512,self.d_model,1)
 
     def forward(self,x):    # B * C * fq * T
         x = self.dropout1(F.gelu(self.conv1(x)))
@@ -162,8 +163,8 @@ class PreNetC(nn.Module):
         x = self.dropout4(F.gelu(self.conv4(x)))
         B, C, Fr, T = x.shape 
         x = x.reshape(B,-1,T)
-        scale = nn.Conv1d(x.shape[1],self.d_model,1)
-        output = scale(x)
+        output = self.scale(x)
+        output = output.unsqueeze(dim=1)
         return output
 
 
@@ -183,8 +184,10 @@ class PostNetC(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
         self.dropout4 = nn.Dropout(dropout)
+        self.scale = nn.Conv1d(512,n_fft//2+1,1)
 
     def forward(self,x):    # B * fq * T
+        x = torch.squeeze(x)
         x = torch.unsqueeze(x,dim=2)
         x = self.dropout1(F.gelu(self.convt1(x)))
         x = self.dropout2(F.gelu(self.convt2(x)))
@@ -192,8 +195,7 @@ class PostNetC(nn.Module):
         x = self.dropout4(F.gelu(self.convt4(x)))
         B, C, Fr, T = x.shape 
         x = x.reshape(-1,Fr,T)
-        scale = nn.Conv1d(Fr,self.n_fft//2 + 1,1)
-        x = scale(x)
+        x = self.scale(x)
         output = x.reshape(B,C,-1,T)
         return output
 
@@ -271,9 +273,9 @@ class Transformer_EC(nn.Module):
     ):
         super(Transformer_EC, self).__init__()
 
-        self.preNetc = PreNetC(d_model, n_channel = 4, kernel_size = 8, stride = 4, padding = 2)
+        self.preNetc = PreNetC(d_model, n_channel = 2, kernel_size = 8, stride = 4, padding = 2)
         self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)
-        self.postNetc = PostNetC(d_model, n_channel = 4, kernel_size = 8, stride = 4, padding = 2, n_fft = n_fft)
+        self.postNetc = PostNetC(d_model, n_channel = 2, kernel_size = 8, stride = 4, padding = 2, n_fft = n_fft)
         self.position_embedding = position_embedding
         self.n_fft = n_fft
 
