@@ -187,7 +187,7 @@ class PostNetC(nn.Module):
         self.scale = nn.Conv1d(512,n_fft//2+1,1)
 
     def forward(self,x):    # B * fq * T
-        x = torch.squeeze(x)
+        x = torch.squeeze(x,dim=1)
         x = torch.unsqueeze(x,dim=2)
         x = self.dropout1(F.gelu(self.convt1(x)))
         x = self.dropout2(F.gelu(self.convt2(x)))
@@ -270,12 +270,13 @@ class Transformer_EC(nn.Module):
         dropout=0.1,
         n_fft = 1024,
         position_embedding = False,
+        n_channel = 4,
     ):
         super(Transformer_EC, self).__init__()
 
-        self.preNetc = PreNetC(d_model, n_channel = 2, kernel_size = 8, stride = 4, padding = 2)
+        self.preNetc = PreNetC(d_model, n_channel = n_channel, kernel_size = 8, stride = 4, padding = 2)
         self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)
-        self.postNetc = PostNetC(d_model, n_channel = 2, kernel_size = 8, stride = 4, padding = 2, n_fft = n_fft)
+        self.postNetc = PostNetC(d_model, n_channel = n_channel, kernel_size = 8, stride = 4, padding = 2, n_fft = n_fft)
         self.position_embedding = position_embedding
         self.n_fft = n_fft
 

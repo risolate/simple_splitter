@@ -1,6 +1,7 @@
 *.pt
 *.wav
 *.mp3
+*.ogg
 *.ipynb
 wandb
 .ipynb_checkpoints
