@@ -271,6 +271,7 @@ class Transformer_EC(nn.Module):
         n_fft = 1024,
         position_embedding = False,
         n_channel = 4,
+        normalize = False,
     ):
         super(Transformer_EC, self).__init__()
 
@@ -278,6 +279,7 @@ class Transformer_EC(nn.Module):
         self.encoder = Encoder(n_block, n_head, d_k, d_v, d_model, d_inner, dropout)
         self.postNetc = PostNetC(d_model, n_channel = n_channel, kernel_size = 8, stride = 4, padding = 2, n_fft = n_fft)
         self.position_embedding = position_embedding
+        self.normalize = normalize
         self.n_fft = n_fft
 
     def sinusoidal_positional_embedding(self, seq_len, dim):
@@ -292,13 +294,20 @@ class Transformer_EC(nn.Module):
 
 
     def forward(self, input_ids, attention_mask = None, labels = None): # B * C * fq * T
-
+        if self.normalize == "std":
+            mean = torch.mean(input_ids, dim = [1,2,3], keepdim = True)
+            std = torch.std(input_ids, dim = [1,2,3], keepdim = True)
+            input_ids = (input_ids - mean) / (0.00001 + std)
         x = self.preNetc(input_ids)  # B * C * d_model * T
         if self.position_embedding:
             pe = self.sinusoidal_positional_embedding(x.shape[-2], x.shape[-1])
             x = x + pe.to(x.device)
         x = self.encoder(x.transpose(-1,-2))
         x = self.postNetc(x.transpose(-1,-2))  # B * C * fq * T
+
+        if self.normalize == "std":
+            x = x * std + mean
+
         loss = None
         if labels is not None:
             batch_size = x.shape[0]
@@ -311,7 +320,7 @@ class Transformer_EC(nn.Module):
                                     window=torch.hann_window(self.n_fft).to(labels),
                                     return_complex = True
                                     )   # B C * fq * T
-            spec_label = torch.view_as_real(spec_label).permute(0,3,1,2)
+            spec_label = torch.view_as_real(spec_label)
             loss = loss_fc(x.contiguous().view(batch_size,-1) ,spec_label.contiguous().view(batch_size,-1))
             return (loss, x)
         else:

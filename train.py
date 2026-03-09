@@ -36,16 +36,19 @@ def compute_metrics(pred):
         preds = preds[:,3]
         labels = labels[:,3]
     batch, ch, freq, length = preds.shape
-    preds = preds.view(batch,-1,2,freq,length).permute(0,1,3,4,2)
+    # preds = preds.view(batch,-1,2,freq,length).permute(0,1,3,4,2)
+    preds = preds.view(batch,ch,freq,-1,2).contiguous()
     preds = torch.view_as_complex(preds)
 
     n_fft = 1024  
-    preds = preds.contiguous().view(-1,freq,length)
+    # preds = preds.contiguous().view(-1,freq,length)
+    preds = preds.contiguous().view(batch*ch,freq,-1)
     signal = torch.istft(preds,
                         n_fft = n_fft,
                         window = torch.hann_window(n_fft).to(preds.real),
                         )  # B C * F * T  -> B C * L
-    signal = signal.reshape(batch,ch//2,-1)
+    # signal = signal.reshape(batch,ch//2,-1)
+    signal = signal.reshape(batch,ch,-1)
 
     signal_distortion_ratio = new_sdr(signal,torch.tensor(labels)).mean(0)
 
@@ -78,6 +81,8 @@ if __name__ == "__main__":
         d_k = config["d_k"],
         d_v = config["d_v"],
         dropout = config["dropout"],
+        n_channel = 2,
+        normalize = "std"
         )
 
     model.to(device)
@@ -86,8 +91,8 @@ if __name__ == "__main__":
 
     musdb_train,musdb_valid = load_dataset("danjacobellis/musdb18HQ",split=["train","validation[:20%]"])
 
-    dataset_train = hug_musdbhq_ch(musdb_train, duration = 300032/44100)
-    dataset_valid = hug_musdbhq_ch(musdb_valid, duration = 300032/44100)
+    dataset_train = hug_musdbhq_len(musdb_train, duration = 150528/44100)
+    dataset_valid = hug_musdbhq_len(musdb_valid, duration = 150528/44100)
 
     print("dataset ready")
     
